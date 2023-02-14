@@ -126,7 +126,7 @@ def dependencyParsing(language:str, sentence:str, lineLimit:int):
 					lines.remove(lines[idx])
 					idx -= 1
 				
-	st.write(lines)
+#	st.write(lines)
 	for lineIdx in range(len(lines)):
 		st.write('Line ' + str(lineIdx) + ': ' + lines[lineIdx])
 		st.write('with length ' + str(len(lines[lineIdx])))
