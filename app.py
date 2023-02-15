@@ -95,27 +95,33 @@ def dependencyParsing(language:str, sentence:str, lineLimit:int):
 		print(constituents)
 
 		groupIndex = 0
-		currentLine = ''
 		while groupIndex < len(constituents):
 			remainLength = countConstituentsLength(groupIndex, len(constituents), constituents, words, language)
-			if currentLine == '' and remainLength - 1 <= lineLimit * 2:
+			if remainLength <= lineLimit:
+#				print('one line section')
+				lines.append(makeSentence(groupIndex, len(constituents), constituents, words, language))
+				break
+			if remainLength - 1 <= lineLimit * 2:
+#				print('two line section')
 				splitPoint = groupIndex
-				bestLength = remainLength
+				bestLength = 0
 				for candidateSplitPoint in range(groupIndex, len(constituents)):
 					currentLength = countConstituentsLength(groupIndex, candidateSplitPoint, constituents, words, language)
-					if abs(currentLength * 2 - remainLength) < abs(bestLength * 2 - remainLength):
+					if currentLength <= lineLimit and (abs(currentLength * 2 - remainLength) < abs(bestLength * 2 - remainLength)):
 						splitPoint = candidateSplitPoint
 						bestLength = currentLength
 
 				lines.append(makeSentence(groupIndex, splitPoint, constituents, words, language))
-				lines.append(makeSentence(splitPoint, len(constituents), constituents, words, language))
-				break
+				groupIndex = splitPoint
 			else:
 				tailIndex = groupIndex + 1
-				while countConstituentsLength(groupIndex, tailIndex, constituents, words, language) <= lineLimit:
+				currentLength = countConstituentsLength(groupIndex, tailIndex, constituents, words, language)
+				while currentLength <= lineLimit:
 					tailIndex += 1
-				lines.append(makeSentence(groupIndex, tailIndex, constituents, words, language))
-				groupIndex = tailIndex
+					currentLength = countConstituentsLength(groupIndex, tailIndex, constituents, words, language)
+					
+				lines.append(makeSentence(groupIndex, tailIndex - 1, constituents, words, language))
+				groupIndex = tailIndex - 1
 
 		for idx in range(1, len(lines)):
 			if lines[idx][0] in puncList:
@@ -134,11 +140,14 @@ def dependencyParsing(language:str, sentence:str, lineLimit:int):
 
 def countConstituentsLength(headIndex, tailIndex, constituents, words, language):
 	totalLength = 0
+	wordNum = 0
 	for constituentIndex in range(headIndex, tailIndex):
 		for idx in range(constituents[constituentIndex][0] - 1, constituents[constituentIndex][1]):
 			totalLength += len(words[idx].text)
+			if words[idx].text not in puncList:
+				wordNum += 1
 	if language in languageWithBlankSpace:
-		totalLength += (len(constituents) - 1) - headIndex - 1 - 1
+		totalLength += wordNum - 1
 	return totalLength
 
 def makeSentence(headIndex, tailIndex, constituents, words, language):
@@ -161,7 +170,13 @@ def makeSentence(headIndex, tailIndex, constituents, words, language):
 
 if __name__ == '__main__':
 	st.title('Long Sentence Splitter')
-	language = st.selectbox('Please select the language of input.', ['en', 'zh', 'ja'])
+	language = st.selectbox('Please select the language of input.', ['英文', '簡中', '繁中'])
+	if language == '英文':
+		language = 'en'
+	elif language == '簡中':
+		language = 'zh-hans'
+	elif language == '繁中':
+		language = 'zh-hant'
 	sentence = st.text_input("Input Sentence:")
 	lineLimit = int(st.text_input("Line limit:"))
 	starts = st.button('run')
