@@ -7,14 +7,26 @@ languageWithBlankSpace = ['en']
 def canMerge(bound:int, rootIndex:int, direction:int, dependentTree:list, theNumberOfChildrenInDependentTree:list, theNumberOfWords:int)->int:
 	if dependentTree[rootIndex][bound] == 1 and theNumberOfChildrenInDependentTree[bound] == 0:
 		return 1
-	if bound >= rootIndex - 1 and bound <= rootIndex + 1:
-		if bound + direction in range(0, theNumberOfWords + 1) and dependentTree[rootIndex][bound] == 1 and dependentTree[bound][bound + direction] == 1 and theNumberOfChildrenInDependentTree[bound] == 1 and theNumberOfChildrenInDependentTree[bound + direction] == 0:
-			return 2
-		elif bound + direction in range(0, theNumberOfWords + 1) and dependentTree[rootIndex][bound + direction] == 1 and dependentTree[bound + direction][bound] == 1 and theNumberOfChildrenInDependentTree[bound + direction] == 1 and theNumberOfChildrenInDependentTree[bound] == 0:
-			return 2
+	if bound + direction in range(0, theNumberOfWords + 1)\
+		and bound + direction * 2 in range(0, theNumberOfWords + 1)\
+		and dependentTree[rootIndex][bound] == 1\
+		and dependentTree[bound][bound + direction] == 1\
+		and theNumberOfChildrenInDependentTree[bound] == 1\
+		and theNumberOfChildrenInDependentTree[bound + direction] == 0\
+		and dependentTree[rootIndex][bound + direction * 2] == 1\
+		and theNumberOfChildrenInDependentTree[bound + direction * 2] == 0:
+		return 2
+	if bound + direction in range(0, theNumberOfWords + 1)\
+		and dependentTree[rootIndex][bound + direction] == 1\
+		and dependentTree[bound + direction][bound] == 1\
+		and theNumberOfChildrenInDependentTree[bound + direction] == 1\
+		and theNumberOfChildrenInDependentTree[bound] == 0\
+		and dependentTree[rootIndex][bound + direction * 2] == 1\
+		and theNumberOfChildrenInDependentTree[bound + direction * 2] == 0:
+		return 2
 	return 0
 
-def findConstituent(currentRootIndex: int, dependentTree: list, theNumberOfChildrenInDependentTree: list, theNumberOfWords: int)->list:
+def findConstituent(currentRootIndex: int, dependentTree: list, theNumberOfChildrenInDependentTree: list, theNumberOfWords: int, words: list)->list:
 	leftBound = currentRootIndex - 1
 	while leftBound > 0:
 		step = canMerge(leftBound, currentRootIndex, -1, dependentTree, theNumberOfChildrenInDependentTree, theNumberOfWords)
@@ -32,39 +44,46 @@ def findConstituent(currentRootIndex: int, dependentTree: list, theNumberOfChild
 		else:
 			rightBound += step
 	rightBound -= 1
+#	print(str(currentRootIndex) + '\' (' + str(leftBound) + ' ' + str(rightBound) + ')')
 
 	ret = [(leftBound, rightBound)]
 	for childIndex in range(theNumberOfWords + 1):
 		if childIndex in range(leftBound, rightBound + 1) or dependentTree[currentRootIndex][childIndex] == 0:
 			continue
 		else:
-			ret = ret + findConstituent(childIndex, dependentTree, theNumberOfChildrenInDependentTree, theNumberOfWords)
+			ret = ret + findConstituent(childIndex, dependentTree, theNumberOfChildrenInDependentTree, theNumberOfWords, words)
 
+	ret = sorted(ret)
 	return ret
 
 def dependencyParsing(language:str, sentence:str, lineLimit:int):
-	lineLimit -= 1
 	st.write('The length of the input sentence is:', len(sentence))
 	nlp = stanza.Pipeline(lang = language, processors = 'tokenize, pos, lemma, depparse')
 	doc = nlp(sentence)
 	print(*[f'word: {word.text}\tupos: {word.upos}\txpos: {word.xpos}\tfeats: {word.feats if word.feats else "_"}' for sent in doc.sentences for word in sent.words], sep='\n')
-	print(*[f'id: {word.id}\tword: {word.text}\thead id: {word.head}\thead: {sent.words[word.head-1].text if word.head > 0 else "root"}\tdeprel: {word.deprel}' for sent in doc.sentences for word in sent.words], sep='\n')
+	print(*[f'id: {word.id}\tword: {word.text}\thead id: {word.head}\thead: {sent.words[word.head-1].text if word.head > 0 else "root"}\tupos: {word.upos}' for sent in doc.sentences for word in sent.words], sep='\n')
+	maxLength = max([max([len(word.text) for word in sentence.words]) for sentence in doc.sentences])
+#	print(maxLength)
+	if maxLength > lineLimit:
+		st.write('The line limit is too small to split a sentence')
+		return
 
-	POSTagger = stanza.Pipeline(lang=language, processors='tokenize,pos')
-	POSdoc = nlp(sentence)
 	lines = []
 #	print(len(doc.sentences))
 #	print(len(POSdoc.sentences))
 	for sentenceIdx in range(len(doc.sentences)):
-		POSOfWords = POSdoc.sentences[sentenceIdx].words
 
 		words = doc.sentences[sentenceIdx].words
 		theNumberOfWords = len(words)
 		isWordsDependent = [[0]*(theNumberOfWords + 1) for _ in range(theNumberOfWords + 1)]
 		theNumberOfDependent = [0 for _ in range(theNumberOfWords + 1)]
 		for word in words:
-			isWordsDependent[word.head][word.id] = 1
-			theNumberOfDependent[word.head] += 1
+			if word.text not in puncList:
+				isWordsDependent[word.head][word.id] = 1
+				theNumberOfDependent[word.head] += 1
+			else:
+				isWordsDependent[word.id - 1][word.id] = 1
+				theNumberOfDependent[word.id - 1] += 1
 
 		currentRootIndex = 0
 		for index in range(theNumberOfWords + 1):
@@ -72,9 +91,11 @@ def dependencyParsing(language:str, sentence:str, lineLimit:int):
 				currentRootIndex = index
 				break
 
-		constituents = findConstituent(currentRootIndex, isWordsDependent, theNumberOfDependent, theNumberOfWords)
+		constituents = findConstituent(currentRootIndex, isWordsDependent, theNumberOfDependent, theNumberOfWords, words)
 	
 		constituents = sorted(constituents)
+		
+		print(constituents)
 
 		idx = 0
 		while idx < len(constituents):
@@ -82,7 +103,7 @@ def dependencyParsing(language:str, sentence:str, lineLimit:int):
 				break
 			currentInterval = constituents[idx]
 			nextInterval = constituents[idx + 1]
-			if (currentInterval[0] != currentInterval[1]) or POSOfWords[idx].upos == 'VERB':
+			if (currentInterval[0] != currentInterval[1]) or words[idx].upos == 'VERB':
 				idx += 1
 				continue
 			if isWordsDependent[currentInterval[1]][nextInterval[0]] == 1 or isWordsDependent[nextInterval[0]][currentInterval[1]] == 1:
@@ -93,6 +114,20 @@ def dependencyParsing(language:str, sentence:str, lineLimit:int):
 				idx += 1
 				
 		print(constituents)
+		constituentIdx = 0
+		while constituentIdx < len(constituents):
+			constituentLength = countConstituentsLength(constituentIdx, constituentIdx + 1, constituents, words, language)
+			constituent = constituents[constituentIdx]
+			head = constituent[0]
+			tail = constituent[1]
+			if lineLimit < constituentLength:
+				constituents.remove(constituent)
+				mid = int((head + tail) / 2)
+				constituents.append((head, mid))
+				constituents.append((mid + 1, tail))
+				constituents = sorted(constituents)
+			else:
+				constituentIdx += 1
 
 		groupIndex = 0
 		while groupIndex < len(constituents):
@@ -114,14 +149,14 @@ def dependencyParsing(language:str, sentence:str, lineLimit:int):
 				lines.append(makeSentence(groupIndex, splitPoint, constituents, words, language))
 				groupIndex = splitPoint
 			else:
-				tailIndex = groupIndex + 1
-				currentLength = countConstituentsLength(groupIndex, tailIndex, constituents, words, language)
+				tailIndex = groupIndex
+				currentLength = countConstituentsLength(groupIndex, tailIndex + 1, constituents, words, language)
 				while currentLength <= lineLimit:
 					tailIndex += 1
-					currentLength = countConstituentsLength(groupIndex, tailIndex, constituents, words, language)
+					currentLength = countConstituentsLength(groupIndex, tailIndex + 1, constituents, words, language)
 					
-				lines.append(makeSentence(groupIndex, tailIndex - 1, constituents, words, language))
-				groupIndex = tailIndex - 1
+				lines.append(makeSentence(groupIndex, tailIndex, constituents, words, language))
+				groupIndex = tailIndex
 
 		for idx in range(1, len(lines)):
 			if lines[idx][0] in puncList:
@@ -146,6 +181,8 @@ def countConstituentsLength(headIndex, tailIndex, constituents, words, language)
 			totalLength += len(words[idx].text)
 			if words[idx].text not in puncList:
 				wordNum += 1
+			if words[idx].text in ['–', 'n\'t', '\'s', '\'d', 'n\'d', 'n’s', '’s', '’t']:
+				wordNum -= 1
 	if language in languageWithBlankSpace:
 		totalLength += wordNum - 1
 	return totalLength
@@ -161,10 +198,15 @@ def makeSentence(headIndex, tailIndex, constituents, words, language):
 
 	for punc in puncList:
 		sentence = sentence.replace(' ' + punc, punc)
-	sentence = sentence.replace(' - ', '-')
+	sentence = sentence.replace(' – ', '–')
+	sentence = sentence.replace('– ', '–')
+	sentence = sentence.replace(' –', '–')
 	sentence = sentence.replace(' n\'t', 'n\'t')
 	sentence = sentence.replace(' \'s', '\'s')
 	sentence = sentence.replace(' \'d', '\'d')
+	sentence = sentence.replace(' n’t', 'n’t')
+	sentence = sentence.replace(' ’s', '’s')
+	sentence = sentence.replace(' ’d', '’d')
 	
 	return sentence
 
